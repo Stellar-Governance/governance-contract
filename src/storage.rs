@@ -40,7 +40,6 @@ pub fn bump_instance(env: &Env) {
 }
 
 /// Reads a persistent entry and extends its TTL if it exists.
-#[allow(dead_code)] // first used in task 1.2
 pub fn get_persistent<V: TryFromVal<Env, Val>>(env: &Env, key: &DataKey) -> Option<V> {
     let storage = env.storage().persistent();
     let value = storage.get::<DataKey, V>(key);
@@ -51,7 +50,6 @@ pub fn get_persistent<V: TryFromVal<Env, Val>>(env: &Env, key: &DataKey) -> Opti
 }
 
 /// Writes a persistent entry and extends its TTL to the maximum.
-#[allow(dead_code)] // first used in task 1.2
 pub fn set_persistent<V: IntoVal<Env, Val>>(env: &Env, key: &DataKey, value: &V) {
     let storage = env.storage().persistent();
     storage.set(key, value);

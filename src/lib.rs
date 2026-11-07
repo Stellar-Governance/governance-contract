@@ -5,8 +5,10 @@
 //! timelock and are executed by anyone. There is no admin key. Not audited.
 #![no_std]
 
+mod checkpoints;
 mod config;
 mod error;
+mod events;
 mod storage;
 mod types;
 
@@ -19,7 +21,8 @@ pub use types::{
     Action, Call, Checkpoint, Config, Proposal, ProposalState, VoteChoice, VoteRecord,
 };
 
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Vec};
+use checkpoints::Series;
+use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, MuxedAddress, String, Vec};
 
 /// Most actions one proposal may carry.
 pub const MAX_ACTIONS: u32 = 5;
@@ -47,30 +50,89 @@ impl Governance {
     }
 
     /// Moves `amount` of the token from `from` into the contract and raises its voting power.
-    /// Returns the new deposit.
-    pub fn deposit(_env: Env, _from: Address, _amount: i128) -> Result<i128, Error> {
-        Err(Error::WrongState) // implemented in task 1.2
+    /// Returns the new deposit. Needs `from`'s authorization.
+    pub fn deposit(env: Env, from: Address, amount: i128) -> Result<i128, Error> {
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+        from.require_auth();
+        let old = read_deposit(&env, &from);
+        let new = old.checked_add(amount).ok_or(Error::Overflow)?;
+        let total = checkpoints::latest(&env, &Series::Total)
+            .checked_add(amount)
+            .ok_or(Error::Overflow)?;
+        let contract = env.current_contract_address();
+        transfer_token(&env, &from, &contract, amount)?;
+        set_power(&env, &from, new, total);
+        events::Deposited {
+            account: from,
+            amount,
+            deposit: new,
+            total,
+        }
+        .publish(&env);
+        Ok(new)
     }
 
-    /// Returns `amount` of the deposit to `from`. Lowers power only for later snapshots.
-    /// Returns the remaining deposit.
-    pub fn withdraw(_env: Env, _from: Address, _amount: i128) -> Result<i128, Error> {
-        Err(Error::WrongState) // implemented in task 1.2
+    /// Returns `amount` of the deposit to `from`. Allowed at any time: it lowers power only for
+    /// snapshots taken after this ledger, and votes already cast stay counted.
+    /// Returns the remaining deposit. Needs `from`'s authorization.
+    pub fn withdraw(env: Env, from: Address, amount: i128) -> Result<i128, Error> {
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+        from.require_auth();
+        let old = read_deposit(&env, &from);
+        if amount > old {
+            return Err(Error::InsufficientDeposit);
+        }
+        let new = old - amount;
+        let total = checkpoints::latest(&env, &Series::Total)
+            .checked_sub(amount)
+            .ok_or(Error::Overflow)?;
+        let contract = env.current_contract_address();
+        transfer_token(&env, &contract, &from, amount)?;
+        set_power(&env, &from, new, total);
+        events::Withdrawn {
+            account: from,
+            amount,
+            deposit: new,
+            total,
+        }
+        .publish(&env);
+        Ok(new)
     }
 
     /// Current deposit of `account` (0 if none).
-    pub fn deposit_of(_env: Env, _account: Address) -> i128 {
-        0 // implemented in task 1.2
+    pub fn deposit_of(env: Env, account: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Deposit(account))
+            .unwrap_or(0)
     }
 
     /// Power of `account` from all changes in ledgers strictly before `ledger`.
-    pub fn power_at(_env: Env, _account: Address, _ledger: u32) -> Result<i128, Error> {
-        Err(Error::WrongState) // implemented in task 1.2
+    /// `ledger` must not be after the current ledger (`SnapshotNotPast`).
+    pub fn power_at(env: Env, account: Address, ledger: u32) -> Result<i128, Error> {
+        check_past(&env, ledger)?;
+        Ok(checkpoints::power_before(
+            &env,
+            &Series::Account(account),
+            ledger,
+            false,
+        ))
     }
 
     /// Total deposited power from all changes in ledgers strictly before `ledger`.
-    pub fn total_power_at(_env: Env, _ledger: u32) -> Result<i128, Error> {
-        Err(Error::WrongState) // implemented in task 1.2
+    /// `ledger` must not be after the current ledger (`SnapshotNotPast`).
+    pub fn total_power_at(env: Env, ledger: u32) -> Result<i128, Error> {
+        check_past(&env, ledger)?;
+        Ok(checkpoints::power_before(
+            &env,
+            &Series::Total,
+            ledger,
+            false,
+        ))
     }
 
     /// Creates a proposal and returns its id (ids start at 1).
@@ -156,6 +218,38 @@ impl Governance {
             .instance()
             .get(&DataKey::ProposalCount)
             .unwrap_or(0)
+    }
+}
+
+fn read_deposit(env: &Env, account: &Address) -> i128 {
+    storage::get_persistent(env, &DataKey::Deposit(account.clone())).unwrap_or(0)
+}
+
+/// Stores the new deposit and writes the account and total checkpoints.
+// WAVE-ISSUE(contract-1): with delegation, the account checkpoint would move to the delegatee here.
+fn set_power(env: &Env, account: &Address, deposit: i128, total: i128) {
+    storage::set_persistent(env, &DataKey::Deposit(account.clone()), &deposit);
+    checkpoints::write(env, &Series::Account(account.clone()), deposit);
+    checkpoints::write(env, &Series::Total, total);
+    storage::bump_instance(env);
+}
+
+/// Transfers the governance token. Any failure (including the token's own error codes, which
+/// could collide with ours) becomes `TokenFailed`.
+fn transfer_token(env: &Env, from: &Address, to: &Address, amount: i128) -> Result<(), Error> {
+    let token = Governance::token(env.clone());
+    let client = token::TokenClient::new(env, &token);
+    match client.try_transfer(from, MuxedAddress::from(to.clone()), &amount) {
+        Ok(Ok(())) => Ok(()),
+        _ => Err(Error::TokenFailed),
+    }
+}
+
+fn check_past(env: &Env, ledger: u32) -> Result<(), Error> {
+    if ledger > env.ledger().sequence() {
+        Err(Error::SnapshotNotPast)
+    } else {
+        Ok(())
     }
 }
 
