@@ -22,9 +22,19 @@ Needs Rust with the `wasm32v1-none` target and the Stellar CLI (30.x). `cargo te
 
 Built with `soroban-sdk` 29.0.1. The optimized wasm is written to `target/wasm32v1-none/release/governance_contract.wasm`.
 
+## Deploy (testnet only)
+
+```bash
+GOV_TOKEN_ID=<token contract id> GOV_DEPLOYER=<stellar CLI identity name> scripts/deploy-testnet.sh
+```
+
+The script builds the wasm, deploys it with the rehearsal config (override with the `GOV_*` variables listed at its top) and prints the new contract id. It refuses any network other than `testnet`. Signing uses a Stellar CLI identity by name; no secret is passed on the command line.
+
 ## Status
 
-Phase 1 of the project plan: implemented and tested locally. Testnet deployment is next; see the repository's `docs/TESTNET.md` once it exists.
+Implemented and tested locally (58 tests). Deployed to testnet on 2026-11-07 as `CAOERDLG52UU6X5JENOXNKN4DWWJPVPNK7AD4RYXE3MA4TRBY62O5I5F` (wasm sha256 `b08f4266…30ef`) and taken through one full lifecycle with the CLI: deposit, propose, vote, queue, execute. Testnet resets wipe deployments; the next scheduled reset is 2026-12-16.
+
+Measured on testnet: rent is most of the cost of a call, because every new entry is extended to the maximum TTL (about 180 days). A first deposit costs about 0.2 XLM, a proposal about 0.2 XLM, a vote about 0.05 XLM, and `queue`/`execute` under 0.001 XLM. The deploy itself paid about 39 XLM of rent for the contract code and instance.
 
 ## License
 
