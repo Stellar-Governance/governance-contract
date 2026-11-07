@@ -96,6 +96,10 @@ pub struct Proposal {
     pub total_power: i128,
     /// Votes (For + Abstain) needed, fixed at creation.
     pub quorum: i128,
+    /// Timelock copied from the config at creation (decision D19).
+    pub timelock_secs: u64,
+    /// Grace period copied from the config at creation (decision D19).
+    pub grace_period_secs: u64,
     pub for_votes: i128,
     pub against_votes: i128,
     pub abstain_votes: i128,

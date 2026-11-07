@@ -9,6 +9,7 @@ mod checkpoints;
 mod config;
 mod error;
 mod events;
+mod proposals;
 mod storage;
 mod types;
 
@@ -135,16 +136,87 @@ impl Governance {
         ))
     }
 
-    /// Creates a proposal and returns its id (ids start at 1).
+    /// Creates a proposal and returns its id (ids start at 1). Needs `proposer`'s authorization.
+    ///
+    /// The snapshot is the current ledger: power and total power come from earlier ledgers.
+    /// The proposer's power there must reach the threshold. Title <= 120 bytes, uri <= 200 bytes,
+    /// at most 5 actions and 8 arguments per `Invoke`; `UpdateConfig` is validated now and again
+    /// at execution; an `Invoke` on the governance token or this contract is `ForbiddenTarget`.
     pub fn propose(
-        _env: Env,
-        _proposer: Address,
-        _title: String,
-        _description_hash: BytesN<32>,
-        _uri: String,
-        _actions: Vec<Action>,
+        env: Env,
+        proposer: Address,
+        title: String,
+        description_hash: BytesN<32>,
+        uri: String,
+        actions: Vec<Action>,
     ) -> Result<u64, Error> {
-        Err(Error::WrongState) // implemented in task 1.3
+        proposer.require_auth();
+        let token = Self::token(env.clone());
+        proposals::validate(
+            &title,
+            &uri,
+            &actions,
+            &token,
+            &env.current_contract_address(),
+        )?;
+        let config = Self::get_config(env.clone());
+        let snapshot_ledger = env.ledger().sequence();
+        let power = checkpoints::power_before(
+            &env,
+            &Series::Account(proposer.clone()),
+            snapshot_ledger,
+            true,
+        );
+        if power < config.proposal_threshold {
+            return Err(Error::BelowThreshold);
+        }
+        let total_power = checkpoints::power_before(&env, &Series::Total, snapshot_ledger, true);
+        let quorum = proposals::quorum(total_power, config.quorum_bps)?;
+        let now = env.ledger().timestamp();
+        let vote_start = now
+            .checked_add(config.voting_delay_secs)
+            .ok_or(Error::Overflow)?;
+        let vote_end = vote_start
+            .checked_add(config.voting_period_secs)
+            .ok_or(Error::Overflow)?;
+        let id = Self::proposal_count(env.clone())
+            .checked_add(1)
+            .ok_or(Error::Overflow)?;
+        let proposal = Proposal {
+            proposer: proposer.clone(),
+            title,
+            description_hash: description_hash.clone(),
+            uri,
+            actions,
+            snapshot_ledger,
+            vote_start,
+            vote_end,
+            total_power,
+            quorum,
+            timelock_secs: config.timelock_secs,
+            grace_period_secs: config.grace_period_secs,
+            for_votes: 0,
+            against_votes: 0,
+            abstain_votes: 0,
+            eta: 0,
+            executed: false,
+            canceled: false,
+        };
+        proposals::save(&env, id, &proposal);
+        env.storage().instance().set(&DataKey::ProposalCount, &id);
+        storage::bump_instance(&env);
+        events::ProposalCreated {
+            proposal_id: id,
+            proposer,
+            snapshot_ledger,
+            vote_start,
+            vote_end,
+            description_hash,
+            total_power,
+            quorum,
+        }
+        .publish(&env);
+        Ok(id)
     }
 
     /// Casts `voter`'s vote and returns the power counted.
@@ -172,14 +244,15 @@ impl Governance {
         Err(Error::WrongState) // implemented in task 1.5
     }
 
-    /// Current state of a proposal.
-    pub fn state(_env: Env, _proposal_id: u64) -> Result<ProposalState, Error> {
-        Err(Error::ProposalNotFound) // implemented in task 1.3
+    /// Current state of a proposal, derived from the ledger time and its flags.
+    pub fn state(env: Env, proposal_id: u64) -> Result<ProposalState, Error> {
+        let p = proposals::peek(&env, proposal_id)?;
+        Ok(proposals::state(&p, env.ledger().timestamp()))
     }
 
     /// A stored proposal.
-    pub fn get_proposal(_env: Env, _proposal_id: u64) -> Result<Proposal, Error> {
-        Err(Error::ProposalNotFound) // implemented in task 1.3
+    pub fn get_proposal(env: Env, proposal_id: u64) -> Result<Proposal, Error> {
+        proposals::peek(&env, proposal_id)
     }
 
     /// How `voter` voted on a proposal, if at all.

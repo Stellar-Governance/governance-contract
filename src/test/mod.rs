@@ -3,12 +3,13 @@ extern crate std;
 
 mod config;
 mod deposits;
+mod proposals;
 
-use crate::{Config, Governance, GovernanceClient};
+use crate::{Action, Config, Error, Governance, GovernanceClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
     token::{StellarAssetClient, TokenClient},
-    Address, Env,
+    Address, BytesN, Env, String, Vec,
 };
 use std::string::String as StdString;
 
@@ -82,6 +83,63 @@ impl World {
     /// Current ledger sequence.
     pub fn ledger(&self) -> u32 {
         self.env.ledger().sequence()
+    }
+
+    /// Current ledger time.
+    pub fn now(&self) -> u64 {
+        self.env.ledger().timestamp()
+    }
+
+    /// Moves to the next ledger at absolute time `t`.
+    pub fn at_time(&self, t: u64) {
+        let l = self.env.ledger().get();
+        self.env.ledger().set_sequence_number(l.sequence_number + 1);
+        self.env.ledger().set_timestamp(t);
+    }
+
+    /// A holder with `amount` deposited, visible to snapshots from the next ledger on.
+    pub fn voter(&self, amount: i128) -> Address {
+        let a = self.holder(amount);
+        self.env.mock_all_auths();
+        self.gov.deposit(&a, &amount);
+        a
+    }
+
+    /// The description hash used in tests.
+    pub fn hash(&self) -> BytesN<32> {
+        BytesN::from_array(&self.env, &[7u8; 32])
+    }
+
+    /// A Soroban string.
+    pub fn text(&self, s: &str) -> String {
+        String::from_str(&self.env, s)
+    }
+
+    /// Proposes `actions` as `proposer` (auths mocked) and returns the raw result.
+    pub fn try_propose(&self, proposer: &Address, actions: &Vec<Action>) -> Result<u64, Error> {
+        self.env.mock_all_auths();
+        match self.gov.try_propose(
+            proposer,
+            &self.text("Raise quorum"),
+            &self.hash(),
+            &self.text("https://example.org/p/1"),
+            actions,
+        ) {
+            Ok(Ok(id)) => Ok(id),
+            Err(Ok(e)) => Err(e),
+            other => std::panic!("unexpected result {other:?}"),
+        }
+    }
+
+    /// Proposes `actions` and returns the id; panics on failure.
+    pub fn propose(&self, proposer: &Address, actions: &Vec<Action>) -> u64 {
+        self.try_propose(proposer, actions)
+            .unwrap_or_else(|e| std::panic!("propose failed: {e:?}"))
+    }
+
+    /// A signal proposal (no actions).
+    pub fn signal(&self, proposer: &Address) -> u64 {
+        self.propose(proposer, &Vec::new(&self.env))
     }
 }
 
