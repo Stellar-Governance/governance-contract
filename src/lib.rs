@@ -219,14 +219,59 @@ impl Governance {
         Ok(id)
     }
 
-    /// Casts `voter`'s vote and returns the power counted.
+    /// Casts `voter`'s vote and returns the power counted. Needs `voter`'s authorization.
+    /// Only while Active (`vote_start <= now < vote_end`). The weight is the voter's power at the
+    /// proposal's snapshot and must be > 0. One vote per voter; it cannot be changed.
     pub fn cast_vote(
-        _env: Env,
-        _voter: Address,
-        _proposal_id: u64,
-        _choice: VoteChoice,
+        env: Env,
+        voter: Address,
+        proposal_id: u64,
+        choice: VoteChoice,
     ) -> Result<i128, Error> {
-        Err(Error::WrongState) // implemented in task 1.4
+        voter.require_auth();
+        let mut p = proposals::load(&env, proposal_id)?;
+        if proposals::state(&p, env.ledger().timestamp()) != ProposalState::Active {
+            return Err(Error::VotingClosed);
+        }
+        let vote_key = DataKey::Vote(proposal_id, voter.clone());
+        if env.storage().persistent().has(&vote_key) {
+            return Err(Error::AlreadyVoted);
+        }
+        let power = checkpoints::power_before(
+            &env,
+            &Series::Account(voter.clone()),
+            p.snapshot_ledger,
+            true,
+        );
+        // WAVE-ISSUE(contract-2): a quadratic mode would derive the weight from `power` here.
+        let weight = power;
+        if weight <= 0 {
+            return Err(Error::NoVotingPower);
+        }
+        let tally = match choice {
+            VoteChoice::For => &mut p.for_votes,
+            VoteChoice::Against => &mut p.against_votes,
+            VoteChoice::Abstain => &mut p.abstain_votes,
+        };
+        *tally = tally.checked_add(weight).ok_or(Error::Overflow)?;
+        storage::set_persistent(
+            &env,
+            &vote_key,
+            &VoteRecord {
+                choice,
+                power: weight,
+            },
+        );
+        proposals::save(&env, proposal_id, &p);
+        storage::bump_instance(&env);
+        events::VoteCast {
+            proposal_id,
+            voter,
+            choice,
+            power: weight,
+        }
+        .publish(&env);
+        Ok(weight)
     }
 
     /// Cancels a proposal. Only its proposer, and only before execution.
@@ -256,8 +301,10 @@ impl Governance {
     }
 
     /// How `voter` voted on a proposal, if at all.
-    pub fn get_vote(_env: Env, _proposal_id: u64, _voter: Address) -> Option<VoteRecord> {
-        None // implemented in task 1.4
+    pub fn get_vote(env: Env, proposal_id: u64, voter: Address) -> Option<VoteRecord> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Vote(proposal_id, voter))
     }
 
     /// Current settings.

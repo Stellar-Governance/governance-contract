@@ -4,6 +4,7 @@ extern crate std;
 mod config;
 mod deposits;
 mod proposals;
+mod votes;
 
 use crate::{Action, Config, Error, Governance, GovernanceClient};
 use soroban_sdk::{

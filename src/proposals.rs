@@ -82,7 +82,6 @@ pub fn state(p: &Proposal, now: u64) -> ProposalState {
 }
 
 /// Reads a proposal for a state-changing call (extends its TTL, decision D14).
-#[allow(dead_code)] // first used in task 1.4
 pub fn load(env: &Env, id: u64) -> Result<Proposal, Error> {
     crate::storage::get_persistent(env, &crate::DataKey::Proposal(id))
         .ok_or(Error::ProposalNotFound)
