@@ -3,6 +3,7 @@ extern crate std;
 
 mod config;
 mod deposits;
+mod lifecycle;
 mod proposals;
 mod votes;
 

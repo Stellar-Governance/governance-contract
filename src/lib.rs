@@ -23,7 +23,9 @@ pub use types::{
 };
 
 use checkpoints::Series;
-use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, MuxedAddress, String, Vec};
+use soroban_sdk::{
+    contract, contractimpl, token, Address, BytesN, Env, MuxedAddress, String, Val, Vec,
+};
 
 /// Most actions one proposal may carry.
 pub const MAX_ACTIONS: u32 = 5;
@@ -274,19 +276,84 @@ impl Governance {
         Ok(weight)
     }
 
-    /// Cancels a proposal. Only its proposer, and only before execution.
-    pub fn cancel(_env: Env, _caller: Address, _proposal_id: u64) -> Result<(), Error> {
-        Err(Error::WrongState) // implemented in task 1.5
+    /// Cancels a proposal. Needs `caller`'s authorization, and `caller` must be the proposer.
+    /// Allowed while Pending, Active, Succeeded or Queued.
+    pub fn cancel(env: Env, caller: Address, proposal_id: u64) -> Result<(), Error> {
+        caller.require_auth();
+        let mut p = proposals::load(&env, proposal_id)?;
+        // WAVE-ISSUE(contract-3): a guardian address from the config would also be accepted here.
+        if caller != p.proposer {
+            return Err(Error::NotAuthorized);
+        }
+        match proposals::state(&p, env.ledger().timestamp()) {
+            ProposalState::Pending
+            | ProposalState::Active
+            | ProposalState::Succeeded
+            | ProposalState::Queued => {}
+            _ => return Err(Error::WrongState),
+        }
+        p.canceled = true;
+        proposals::save(&env, proposal_id, &p);
+        storage::bump_instance(&env);
+        events::ProposalCanceled { proposal_id }.publish(&env);
+        Ok(())
     }
 
-    /// Queues a Succeeded proposal. Anyone may call. Returns the eta.
-    pub fn queue(_env: Env, _proposal_id: u64) -> Result<u64, Error> {
-        Err(Error::WrongState) // implemented in task 1.5
+    /// Queues a Succeeded proposal: `eta = now + timelock`. Anyone may call. Returns the eta.
+    pub fn queue(env: Env, proposal_id: u64) -> Result<u64, Error> {
+        let mut p = proposals::load(&env, proposal_id)?;
+        let now = env.ledger().timestamp();
+        if proposals::state(&p, now) != ProposalState::Succeeded {
+            return Err(Error::WrongState);
+        }
+        let eta = now.checked_add(p.timelock_secs).ok_or(Error::Overflow)?;
+        p.eta = eta;
+        proposals::save(&env, proposal_id, &p);
+        storage::bump_instance(&env);
+        events::ProposalQueued { proposal_id, eta }.publish(&env);
+        Ok(eta)
     }
 
-    /// Executes a Queued proposal inside its window. Anyone may call.
-    pub fn execute(_env: Env, _proposal_id: u64) -> Result<(), Error> {
-        Err(Error::WrongState) // implemented in task 1.5
+    /// Executes a Queued proposal when `eta <= now < eta + grace`. Anyone may call.
+    /// Marks it executed, then runs its actions in order. If any action fails the call returns
+    /// `ActionFailed` and every change, including the executed flag, is rolled back.
+    pub fn execute(env: Env, proposal_id: u64) -> Result<(), Error> {
+        let mut p = proposals::load(&env, proposal_id)?;
+        let now = env.ledger().timestamp();
+        if proposals::state(&p, now) != ProposalState::Queued {
+            return Err(Error::WrongState);
+        }
+        if now < p.eta {
+            return Err(Error::TimelockActive);
+        }
+        p.executed = true;
+        proposals::save(&env, proposal_id, &p);
+        for action in p.actions.iter() {
+            match action {
+                Action::UpdateConfig(config) => {
+                    config::validate(&config).map_err(|_| Error::ActionFailed)?;
+                    env.storage().instance().set(&DataKey::Config, &config);
+                    events::ConfigUpdated {
+                        proposal_id,
+                        config,
+                    }
+                    .publish(&env);
+                }
+                Action::Invoke(call) => {
+                    let result = env.try_invoke_contract::<Val, soroban_sdk::Error>(
+                        &call.contract,
+                        &call.function,
+                        call.args,
+                    );
+                    if !matches!(result, Ok(Ok(_))) {
+                        return Err(Error::ActionFailed);
+                    }
+                }
+            }
+        }
+        storage::bump_instance(&env);
+        events::ProposalExecuted { proposal_id }.publish(&env);
+        Ok(())
     }
 
     /// Current state of a proposal, derived from the ledger time and its flags.
