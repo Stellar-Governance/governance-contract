@@ -1,4 +1,5 @@
-//! Property-style checks of the PLAYBOOK §4 invariants over long random operation sequences.
+//! Property-style checks of the invariants listed in docs/CONTRACT.md ("Tests") over long random
+//! operation sequences.
 //! The generator is a fixed-seed linear congruential generator, so every run is identical.
 extern crate std;
 

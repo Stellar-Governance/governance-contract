@@ -150,7 +150,7 @@ fn canceled_proposal_cannot_be_voted_on() {
     );
 }
 
-/// Invariant (PLAYBOOK §4): after a proposal exists, moving tokens to another identity gives
+/// Invariant (docs/CONTRACT.md): after a proposal exists, moving tokens to another identity gives
 /// that identity no power on it, and the first voter's weight stays what it was.
 #[test]
 fn moved_tokens_cannot_vote_twice() {
@@ -179,7 +179,7 @@ fn moved_tokens_cannot_vote_twice() {
 }
 
 /// A voter who withdraws and re-deposits more after the snapshot still votes with the power
-/// at the snapshot (PLAYBOOK §1 scenario (e), contract side).
+/// at the snapshot (demo scenario (e) in docs/DEMO.md, contract side).
 #[test]
 fn redeposit_after_snapshot_does_not_change_weight() {
     let (w, id, [_, b, _]) = active();

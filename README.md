@@ -1,5 +1,7 @@
 # governance-contract
 
+[![ci](https://github.com/__GITHUB_ORG__/governance-contract/actions/workflows/ci.yml/badge.svg)](https://github.com/__GITHUB_ORG__/governance-contract/actions/workflows/ci.yml)
+
 Soroban smart contract for Stellar Governance. One deployment governs with one SEP-41 token:
 
 - holders `deposit` the token to get voting power, checkpointed per ledger, and can `withdraw` at any time;
@@ -46,6 +48,17 @@ A redeploy drill on 2026-11-09 took 333 seconds from the script start to written
 Implemented and tested locally (58 tests). Deployed to testnet on 2026-11-07 as `CAOERDLG52UU6X5JENOXNKN4DWWJPVPNK7AD4RYXE3MA4TRBY62O5I5F` (wasm sha256 `b08f4266…30ef`) and taken through one full lifecycle with the CLI, then through a full demo (settings change, treasury transfer by `Invoke`, a proposal that missed the quorum, a cancellation, and a re-deposit after a snapshot that added no power). Testnet resets wipe deployments; the next scheduled reset is 2026-12-16.
 
 Measured on testnet: rent is most of the cost of a call, because every new entry is extended to the maximum TTL (about 180 days). A first deposit costs about 0.2 XLM, a proposal about 0.2 XLM, a vote about 0.05 XLM, and `queue`/`execute` under 0.001 XLM. The deploy itself paid about 39 XLM of rent for the contract code and instance.
+
+## Related repositories
+
+Stellar Governance is split into four repositories. Dependence runs one way: contract, then toolkit, then frontend, then analytics.
+
+- **governance-contract** (this repository): Soroban contract (Rust); also holds the project documents
+- [governance-toolkit](https://github.com/__GITHUB_ORG__/governance-toolkit): Node service: indexer, drafts, discussion, sign-in, read API
+- [governance-frontend](https://github.com/__GITHUB_ORG__/governance-frontend): Next.js voting dashboard
+- [voting-analytics](https://github.com/__GITHUB_ORG__/voting-analytics): static analytics site
+
+Project documents, kept in this repository: [docs/TESTNET.md](docs/TESTNET.md) (identities, contract ids, deployment, measured fees), [docs/DEMO.md](docs/DEMO.md) (what was run on testnet and what was observed), [docs/GOVERNANCE_RISKS.md](docs/GOVERNANCE_RISKS.md) (known risks, stated plainly).
 
 ## License
 

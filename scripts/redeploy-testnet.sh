@@ -5,8 +5,9 @@
 # secret is ever printed.
 #
 # Env: GOV_ALIAS (CLI alias for the new contract, default gov-governance),
-#      GOV_ENV_OUT (folder that holds the package folders whose env files are written, default
-#      the repository root next to this package; set it elsewhere for a drill),
+#      GOV_ENV_OUT (folder that holds the governance-toolkit, governance-frontend and
+#      voting-analytics checkouts whose env files are written, default
+#      the parent folder of this checkout; set it elsewhere for a drill),
 #      plus the config variables of deploy-testnet.sh.
 set -euo pipefail
 . "$(dirname "$0")/_common.sh"

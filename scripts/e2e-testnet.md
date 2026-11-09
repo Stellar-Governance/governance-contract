@@ -6,7 +6,7 @@ Timings below assume the rehearsal config (`deploy-testnet.sh` defaults): voting
 
 ## 0. Prerequisites
 
-- Identities `gov-deployer`, `gov-voter-a`, `gov-voter-b`, `gov-voter-c`, `gov-treasury-recipient`, `gov-token-issuer`, funded by friendbot, with GOV trustlines and balances (see the repository's `docs/TESTNET.md` for the commands).
+- Identities `gov-deployer`, `gov-voter-a`, `gov-voter-b`, `gov-voter-c`, `gov-treasury-recipient`, `gov-token-issuer`, funded by friendbot, with GOV trustlines and balances (see `docs/TESTNET.md` for the commands).
 - The governance contract deployed: `GOV_TOKEN_ID=<GOV SAC id> scripts/deploy-testnet.sh` (saves the CLI alias `gov-governance`).
 - The toolkit running against it (`governance-toolkit`: `pnpm build && pnpm start` with a `.env` for testnet).
 
@@ -72,4 +72,4 @@ Create a proposal. Then voter b withdraws, the tokens move to voter c, voter c d
 
 ## 7. Record
 
-Write every transaction hash, ledger and time into the repository's `docs/DEMO.md`, plus what the frontend and analytics show and whether it matches the chain.
+Write every transaction hash, ledger and time into `docs/DEMO.md`, plus what the frontend and analytics show and whether it matches the chain.

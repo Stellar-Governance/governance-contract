@@ -352,7 +352,7 @@ fn update_config_applies_only_to_later_proposals() {
     assert_eq!(p.vote_end - p.vote_start, 300);
 }
 
-/// Research item 3, PLAYBOOK §1 (b): the contract transfers a token it holds, through `Invoke`,
+/// Demo scenario (b) (docs/DEMO.md): the contract transfers a token it holds, through `Invoke`,
 /// with no signature from anyone (the contract is the direct invoker of the transfer).
 #[test]
 fn invoke_transfers_a_treasury_token() {
