@@ -30,6 +30,17 @@ GOV_TOKEN_ID=<token contract id> GOV_DEPLOYER=<stellar CLI identity name> script
 
 The script builds the wasm, deploys it with the rehearsal config (override with the `GOV_*` variables listed at its top) and prints the new contract id. It refuses any network other than `testnet`. Signing uses a Stellar CLI identity by name; no secret is passed on the command line.
 
+## Rehearsal scripts (testnet only)
+
+| Script | What |
+|---|---|
+| `scripts/redeploy-testnet.sh` | Rebuilds everything after a testnet reset: identities (in the CLI key store), the GOV asset and balances, the contract, and the env files of the toolkit, frontend and analytics |
+| `scripts/fund-treasury.sh` | Sends a token (XLM by default) to the contract |
+| `scripts/propose-invoke.sh` | Creates a treasury proposal with one `Invoke` transfer |
+| `scripts/e2e-testnet.md` | The full demo runbook |
+
+A redeploy drill on 2026-11-09 took 333 seconds from the script start to written env files (most of it friendbot funding six accounts); the frontend and analytics then need a rebuild to pick up the new contract id.
+
 ## Status
 
 Implemented and tested locally (58 tests). Deployed to testnet on 2026-11-07 as `CAOERDLG52UU6X5JENOXNKN4DWWJPVPNK7AD4RYXE3MA4TRBY62O5I5F` (wasm sha256 `b08f4266…30ef`) and taken through one full lifecycle with the CLI: deposit, propose, vote, queue, execute. Testnet resets wipe deployments; the next scheduled reset is 2026-12-16.
