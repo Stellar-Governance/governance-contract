@@ -1,6 +1,6 @@
 # governance-contract
 
-[![ci](https://github.com/__GITHUB_ORG__/governance-contract/actions/workflows/ci.yml/badge.svg)](https://github.com/__GITHUB_ORG__/governance-contract/actions/workflows/ci.yml)
+[![ci](https://github.com/Stellar-Governance/governance-contract/actions/workflows/ci.yml/badge.svg)](https://github.com/Stellar-Governance/governance-contract/actions/workflows/ci.yml)
 
 Soroban smart contract for Stellar Governance. One deployment governs with one SEP-41 token:
 
@@ -54,9 +54,9 @@ Measured on testnet: rent is most of the cost of a call, because every new entry
 Stellar Governance is split into four repositories. Dependence runs one way: contract, then toolkit, then frontend, then analytics.
 
 - **governance-contract** (this repository): Soroban contract (Rust); also holds the project documents
-- [governance-toolkit](https://github.com/__GITHUB_ORG__/governance-toolkit): Node service: indexer, drafts, discussion, sign-in, read API
-- [governance-frontend](https://github.com/__GITHUB_ORG__/governance-frontend): Next.js voting dashboard
-- [voting-analytics](https://github.com/__GITHUB_ORG__/voting-analytics): static analytics site
+- [governance-toolkit](https://github.com/Stellar-Governance/governance-toolkit): Node service: indexer, drafts, discussion, sign-in, read API
+- [governance-frontend](https://github.com/Stellar-Governance/governance-frontend): Next.js voting dashboard
+- [voting-analytics](https://github.com/Stellar-Governance/voting-analytics): static analytics site
 
 Project documents, kept in this repository: [docs/TESTNET.md](docs/TESTNET.md) (identities, contract ids, deployment, measured fees), [docs/DEMO.md](docs/DEMO.md) (what was run on testnet and what was observed), [docs/GOVERNANCE_RISKS.md](docs/GOVERNANCE_RISKS.md) (known risks, stated plainly).
 

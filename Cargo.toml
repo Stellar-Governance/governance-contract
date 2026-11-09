@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 description = "Soroban governance contract: deposits, checkpointed voting power, proposals, votes, timelock, execution."
-repository = "https://github.com/__GITHUB_ORG__/governance-contract"
+repository = "https://github.com/Stellar-Governance/governance-contract"
 publish = false
 
 [lib]
